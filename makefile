@@ -39,7 +39,7 @@ VPATH +=:.
 
 # CFLAGS+=-MD -MP
 CFLAGS+=$(patsubst %,-I%,$(INC))
-CFLAGS+= -std=gnu99 -Wextra -Wall -Werror
+CFLAGS+= -std=gnu99 -Wextra -Werror
 LDFLAGS :=
 # -include $(OBJECTS:.o=.d)
 

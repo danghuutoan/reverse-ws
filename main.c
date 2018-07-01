@@ -44,6 +44,7 @@ typedef struct ws_frame_s {
 	uint8_t opcode;
 	uint8_t masked;
 	uint64_t payload_len;
+	uint8_t * data;
 } ws_frame_t;
 
 char* opening_handshake_str = 
@@ -75,6 +76,24 @@ void ws_parse_frame(ws_frame_t* frame, char* buffer){
 	}
 }
 
+void ws_create_frame(ws_frame_t* frame, char*buffer)
+{
+	buffer[0] = 0;
+	buffer[0] |= (frame->fin * WS_FIN_MASK);
+	buffer[0] |= (frame->rsv1 * WS_RSV1_MASK);
+	buffer[0] |= (frame->rsv2 * WS_RSV2_MASK);
+	buffer[0] |= (frame->rsv3 * WS_RSV3_MASK);
+	buffer[0] += frame->opcode;
+	buffer[1] = 0;
+	buffer[1] |= (frame->masked * WS_FRAME_MASKED_MASK);
+
+	buffer[1] += frame->payload_len;
+
+	
+	// coppy data to buffer;
+	memcpy( &buffer[2], frame->data, frame->payload_len);
+
+}
 
 void hexDump (char *desc, void *addr, int len) {
     int i;
@@ -197,5 +216,26 @@ int main(void) {
 	printf("payload_len %lx\n", frame.payload_len);
 	printf("masked %d\n", frame.masked);
 	printf("opcode %d\n", frame.opcode);
+
+	// uint8_t data [6] = {'1','2','3', '4', '5', '6'};
+	uint8_t *data = "helllo every body hdjdsjdsjfdjfdjfdfdj";
+	frame.fin = 1;
+	frame.rsv1 = 0;
+	frame.rsv2 = 0;
+	frame.rsv3 = 0;
+	frame.opcode = 0x01;
+	frame.masked = 0;
+	frame.payload_len = strlen(data);
+	frame.data = data;
+	char buffer[4096];
+	ws_create_frame(&frame, buffer);
+	hexDump("buffer", buffer, frame.payload_len + 2);	
+
+	retval = send(sockfd, buffer, frame.payload_len + 2, 0);
+
+	if(retval < 0) {
+		printf("cannot send the msg \n");
+		exit(EXIT_FAILURE);
+	}
 
 }
