@@ -13,6 +13,38 @@
 #define DEST_PORT 8080
 #define DEST_IP "192.168.0.125"
 
+#define WS_FIN_MASK							(uint8_t)(0x80)
+#define WS_FRAME_GET_FIN(buf) 				(uint8_t)((buf & WS_FIN_MASK) == WS_FIN_MASK)
+
+#define WS_RSV1_MASK 						(uint8_t)(0x40)
+#define WS_FRAME_GET_RSV1(buf) 				(uint8_t)((buf & WS_RSV1_MASK) == WS_RSV1_MASK)
+
+#define WS_RSV2_MASK 						(uint8_t)(0x20)
+#define WS_FRAME_GET_RSV2(buf) 				(uint8_t)((buf & WS_RSV2_MASK) == WS_RSV2_MASK)
+
+#define WS_RSV3_MASK 						(uint8_t)(0x10)
+#define WS_FRAME_GET_RSV3(buf) 				(uint8_t)((buf & WS_RSV3_MASK) == WS_RSV3_MASK)
+
+#define WS_OPCODE_MASK 						(uint8_t)(0x0F)
+#define WS_FRAME_GET_OPCODE(buf) 			(uint8_t)(buf & WS_OPCODE_MASK)
+
+#define WS_FRAME_MASKED_MASK 				(uint8_t)(0x80)
+#define WS_FRAME_GET_MASKED(buf)			(uint8_t)((buf & WS_FRAME_MASKED_MASK) == WS_FRAME_MASKED_MASK)
+
+#define WS_FRAME_PAYLOAD_LEN_MASK			(uint8_t)(0X7F)
+#define WS_FRAME_GET_PAYLOAD_LEN(buf)		(uint8_t)(buf & WS_FRAME_PAYLOAD_LEN_MASK)
+
+
+
+typedef struct ws_frame_s {
+	uint8_t fin;
+	uint8_t rsv1;
+	uint8_t rsv2;
+	uint8_t rsv3;
+	uint8_t opcode;
+	uint8_t masked;
+	uint64_t payload_len;
+} ws_frame_t;
 
 char* opening_handshake_str = 
 "GET /chat HTTP/1.1\r\n"
@@ -24,6 +56,26 @@ char* opening_handshake_str =
 "Sec-WebSocket-Protocol: chat, superchat\r\n"
 "Sec-WebSocket-Version: 13\r\n"
 "\r\n";
+
+void ws_parse_frame(ws_frame_t* frame, char* buffer){
+	frame->fin = WS_FRAME_GET_FIN(buffer[0]);
+	frame->rsv1 = WS_FRAME_GET_RSV1(buffer[0]);
+	frame->rsv2 = WS_FRAME_GET_RSV2(buffer[0]);
+	frame->rsv3 = WS_FRAME_GET_RSV3(buffer[0]);
+	frame->opcode = WS_FRAME_GET_OPCODE(buffer[0]);
+
+	frame->masked = WS_FRAME_GET_MASKED(buffer[1]);
+	frame->payload_len = WS_FRAME_GET_PAYLOAD_LEN(buffer[1]);
+	if( frame->payload_len == 0x7e) {
+		frame->payload_len = buffer[3] + (uint16_t)(buffer[2] << 8);
+	}
+
+	if( frame->payload_len == 0x7f ) {
+		frame->payload_len = (uint64_t)buffer[9] + ((uint64_t)buffer[8] << 8) + ((uint64_t)buffer[7] << 16) + ((uint64_t)buffer[6] << 24) + ((uint64_t)buffer[5] << 32) + ((uint64_t)buffer[4] << 40) + ((uint64_t)buffer[5] << 48) + ((uint64_t)buffer[6] << 56);
+	}
+}
+
+
 void hexDump (char *desc, void *addr, int len) {
     int i;
     unsigned char buff[17];
@@ -118,6 +170,7 @@ int main(void) {
 	printf("receive msg: %s\n", recv_buffer);
 
 	memset(recv_buffer, 0, 4096);
+	printf("debug line 173\n");	
 	retval = recv(sockfd, recv_buffer, 4096, 0);
 
 	if(retval < 0) {
@@ -125,14 +178,24 @@ int main(void) {
 		exit(EXIT_FAILURE);
 	}
 
-	// printf("receive msg: %s\n", recv_buffer);
-	// hexDump("recv_buffer", &recv_buffer, retval);
-	// recv_buffer[2] = '8';
-	retval = send(sockfd, "hello server", strlen("hello server"), 0);
+	printf("receive msg: %s\n", recv_buffer);
+	hexDump("recv_buffer", &recv_buffer, retval);
+	// retval = send(sockfd, recv_buffer, retval, 0);
 
-	if(retval < 0) {
-		printf("cannot send the msg \n");
-		exit(EXIT_FAILURE);
-	}
+	// if(retval < 0) {
+	// 	printf("cannot send the msg \n");
+	// 	exit(EXIT_FAILURE);
+	// }
+
+	ws_frame_t frame;
+	ws_parse_frame(&frame, recv_buffer);
+
+	printf("fin %d\n", frame.fin);
+	printf("rsv1 %d\n", frame.rsv1);
+	printf("rsv2 %d\n", frame.rsv2);
+	printf("rsv3 %d\n", frame.rsv3);
+	printf("payload_len %lx\n", frame.payload_len);
+	printf("masked %d\n", frame.masked);
+	printf("opcode %d\n", frame.opcode);
 
 }
